@@ -6,10 +6,11 @@ export async function POST(request) {
     return Response.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
 
-  if (!data?.name || !data?.phone || !data?.grade || !data?.consent) {
+  if (!data?.name || !data?.phone || !data?.grade || data?.consent !== true) {
     return Response.json({ ok: false, error: "missing_fields" }, { status: 400 });
   }
 
+  // received_at stays UTC ISO here; the Apps Script converts it to KST for the sheet.
   const entry = {
     received_at: new Date().toISOString(),
     name: data.name,
@@ -17,6 +18,7 @@ export async function POST(request) {
     grade: data.grade,
     where: data.where || "",
     pain: data.pain || "",
+    consent: true,
   };
 
   const webhookUrl = process.env.LEADS_WEBHOOK_URL;

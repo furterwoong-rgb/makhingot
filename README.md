@@ -15,7 +15,7 @@ http://localhost:3000 에서 확인. 이 상태에서 폼을 제출하면 서버
 
 별도 백엔드 없이 무료로 접수 데이터를 쌓는 가장 쉬운 방법입니다.
 
-1. 구글시트를 새로 만들고, 1행에 `received_at, name, phone, grade, where, pain` 을 적습니다.
+1. 구글시트를 새로 만들고, 1행에 `received_at, name, phone, grade, where, pain, consent` 를 적습니다. (`received_at`은 한국 시간으로 기록됩니다.)
 2. 시트 메뉴 **확장 프로그램 → Apps Script** 를 엽니다.
 3. 아래 코드를 붙여넣습니다.
 
@@ -23,8 +23,12 @@ http://localhost:3000 에서 확인. 이 상태에서 폼을 제출하면 서버
    function doPost(e) {
      const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
      const data = JSON.parse(e.postData.contents);
+     const receivedKst = Utilities.formatDate(
+       new Date(data.received_at), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"
+     );
      sheet.appendRow([
-       data.received_at, data.name, data.phone, data.grade, data.where, data.pain
+       receivedKst, data.name, data.phone, data.grade, data.where, data.pain,
+       data.consent === true ? "동의" : ""
      ]);
      return ContentService.createTextOutput(JSON.stringify({ ok: true }))
        .setMimeType(ContentService.MimeType.JSON);
@@ -35,6 +39,8 @@ http://localhost:3000 에서 확인. 이 상태에서 폼을 제출하면 서버
    - 실행 권한: 나
    - 액세스 권한: **모든 사용자** (이게 핵심 — 아니면 우리 서버가 못 씁니다)
 5. 배포하면 `https://script.google.com/macros/s/xxxx/exec` 형태의 URL이 나옵니다. 이걸 복사해두세요.
+
+> 나중에 스크립트를 수정하면 **배포 → 배포 관리 → ✏️ 편집 → 버전: 새 버전 → 배포** 로 올려야 반영됩니다(URL 유지). "새 배포"를 누르면 URL이 바뀌니 주의.
 
 이 URL을 3단계(Vercel)에서 `LEADS_WEBHOOK_URL` 환경변수로 넣으면, 신청이 들어올 때마다 시트에 한 줄씩 쌓입니다.
 
