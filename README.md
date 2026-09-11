@@ -20,8 +20,12 @@ http://localhost:3000 에서 확인. 이 상태에서 폼을 제출하면 서버
 3. 아래 코드를 붙여넣습니다.
 
    ```javascript
+   // 알림 받을 주소. 비워두면 이 스크립트 소유자(본인) Gmail로 보냅니다.
+   const NOTIFY_EMAIL = "";
+
    function doPost(e) {
-     const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+     const ss = SpreadsheetApp.getActiveSpreadsheet();
+     const sheet = ss.getActiveSheet();
      const data = JSON.parse(e.postData.contents);
      const receivedKst = Utilities.formatDate(
        new Date(data.received_at), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"
@@ -30,10 +34,46 @@ http://localhost:3000 에서 확인. 이 상태에서 폼을 제출하면 서버
        receivedKst, data.name, data.phone, data.grade, data.where, data.pain,
        data.consent === true ? "동의" : ""
      ]);
+
+     // 접수는 이미 저장됐으므로, 알림 메일이 실패해도 신청은 성공 처리합니다.
+     try {
+       notifyNewLead(data, receivedKst, ss.getUrl());
+     } catch (err) {
+       console.error("알림 메일 실패", err);
+     }
+
      return ContentService.createTextOutput(JSON.stringify({ ok: true }))
        .setMimeType(ContentService.MimeType.JSON);
    }
+
+   function notifyNewLead(data, receivedKst, sheetUrl) {
+     const to = NOTIFY_EMAIL || Session.getEffectiveUser().getEmail();
+     const subject = `[막힌곳] 새 신청 — ${data.name} (${data.grade})`;
+     const body = [
+       `접수: ${receivedKst}`,
+       `성함: ${data.name}`,
+       `연락처: ${data.phone}`,
+       `학년: ${data.grade}`,
+       `다니는 곳: ${data.where || "-"}`,
+       `답답한 점: ${data.pain || "-"}`,
+       "",
+       "⏰ 24시간 안에 카카오톡으로 사진 보내는 방법을 안내해 주세요.",
+       `시트: ${sheetUrl}`,
+     ].join("\n");
+     MailApp.sendEmail(to, subject, body);
+   }
+
+   // 편집기에서 한 번 실행: 메일 권한 승인 + 테스트 메일 발송 (시트에는 기록 안 함)
+   function testNotify() {
+     notifyNewLead(
+       { name: "테스트", grade: "고1", phone: "000-0000-0000", where: "", pain: "알림 테스트" },
+       Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"),
+       SpreadsheetApp.getActiveSpreadsheet().getUrl()
+     );
+   }
    ```
+
+   붙여넣고 저장한 뒤, 상단 함수 선택 드롭다운에서 `testNotify` → **실행** 을 한 번 눌러 메일 권한을 승인하세요. 테스트 메일이 오면 정상입니다.
 
 4. 우측 상단 **배포 → 새 배포** → 유형 "웹 앱" 선택.
    - 실행 권한: 나
@@ -42,7 +82,7 @@ http://localhost:3000 에서 확인. 이 상태에서 폼을 제출하면 서버
 
 > 나중에 스크립트를 수정하면 **배포 → 배포 관리 → ✏️ 편집 → 버전: 새 버전 → 배포** 로 올려야 반영됩니다(URL 유지). "새 배포"를 누르면 URL이 바뀌니 주의.
 
-이 URL을 3단계(Vercel)에서 `LEADS_WEBHOOK_URL` 환경변수로 넣으면, 신청이 들어올 때마다 시트에 한 줄씩 쌓입니다.
+이 URL을 3단계(Vercel)에서 `LEADS_WEBHOOK_URL` 환경변수로 넣으면, 신청이 들어올 때마다 시트에 한 줄씩 쌓이고 알림 메일이 옵니다.
 
 ## 2. GitHub에 올리기
 
@@ -79,6 +119,6 @@ gh repo create makhingot --private --source=. --push
 
 ## 다음에 할 일 (지금은 안 해도 됨)
 
-- 접수 알림을 카카오톡/문자로 받고 싶으면 Apps Script에 `MessageApp` 또는 슬랙 웹훅을 얹으면 됩니다.
+- 이메일 대신 카카오톡/문자로 받고 싶으면 Apps Script의 `notifyNewLead`를 해당 서비스 호출로 바꾸면 됩니다.
 - 신청 폼 스팸 방지가 필요해지면 Cloudflare Turnstile(무료 캡차)을 붙이면 됩니다.
 - 지금은 랜딩 페이지 하나뿐이라 이 정도 구성으로 충분합니다.
